@@ -65,7 +65,8 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # TTS — Piper (M2)
     # ------------------------------------------------------------------ #
-    piper_voice: str = Field(default="cs_CZ-jirka-medium", alias="PIPER_VOICE")
+    # Female Czech voice — Viky is "ona". (Male alt: cs_CZ-jirka-medium.)
+    piper_voice: str = Field(default="cs_CZ-kasandra-medium", alias="PIPER_VOICE")
     piper_voice_path: str = Field(default="", alias="PIPER_VOICE_PATH")
     piper_binary: str = Field(default="piper", alias="PIPER_BINARY")
     tts_sample_rate: int = Field(default=22050, alias="TTS_SAMPLE_RATE")
