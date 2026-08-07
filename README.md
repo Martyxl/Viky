@@ -77,6 +77,34 @@ curl http://localhost:8000/status
 All three services expose `GET /health`; the orchestrator's `GET /status`
 aggregates the health of `stt` and `tts` in one call.
 
+## Make Viky speak (M2)
+
+Viky uses a **female Czech voice** (`cs_CZ-kasandra-medium`, Piper, 100% local).
+
+```bash
+# 1. Download the voice model into voices/ (~60 MB, gitignored)
+python scripts/download_voice.py            # uses PIPER_VOICE from .env
+#   or a specific one:  python scripts/download_voice.py cs_CZ-jirka-medium
+
+# 2a. Speak through the running TTS service (streams audio as it synthesizes)
+python scripts/say.py "Ahoj, jsem Viky. Jaká je dnešní statistika na MNQ?"
+
+# 2b. Or without a server (in-process):
+python scripts/say.py "Pošli mi večerní report emailem." --local
+
+# 2c. Save a WAV instead of playing (no speakers needed):
+python scripts/say.py "Krátká věta." --out reply.wav
+```
+
+The TTS service exposes:
+- `POST /speak` → streams raw **int16 LE mono PCM** as Piper produces it (header
+  `X-Sample-Rate`); playback can start before the whole sentence is synthesized.
+- `POST /speak.wav` → the full utterance as one WAV (handy for `curl`).
+
+> **Windows + diacritics:** set `PYTHONUTF8=1` before running CLI scripts so
+> Czech characters in command-line arguments are decoded as UTF-8. (The HTTP
+> path is UTF-8 already — this only affects `argv`.)
+
 ## Configuration
 
 Everything is driven by `.env` (see `.env.example` for the full annotated
@@ -125,7 +153,7 @@ integration test.
 ## Milestones
 
 - [x] **M1 — Skeleton:** structure, config, `.env.example`, docker-compose, README; all services answer `/health`.
-- [ ] **M2 — TTS:** Piper streams Czech audio; `scripts/say.py`.
+- [x] **M2 — TTS:** Piper streams Czech audio from the female voice; `scripts/say.py` + `scripts/download_voice.py`.
 - [ ] **M3 — STT:** faster-whisper + VAD; `scripts/listen.py`.
 - [ ] **M4 — Wake word:** detection loop + earcon; swap in `viky.onnx`.
 - [ ] **M5 — Brain:** LiteLLM + system prompt + tool schemas (dry-run); `scripts/chat.py`.
