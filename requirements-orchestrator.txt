@@ -1,0 +1,6 @@
+# Orchestrator deps (M4/M5/M6). Install on top of requirements.txt.
+# Wake word + audio capture + LLM routing run here.
+openwakeword>=0.6
+sounddevice>=0.4.7
+numpy>=1.26
+litellm>=1.40

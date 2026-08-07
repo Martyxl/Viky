@@ -1,0 +1,4 @@
+# TTS service deps (M2). Install on top of requirements.txt.
+piper-tts>=1.2
+soundfile>=0.12
+numpy>=1.26

@@ -1,0 +1,59 @@
+# Viky — docker-compose (M1 skeleton).
+# Services: stt, tts, orchestrator. Wake word + audio capture live in the
+# orchestrator (needs host audio device access — see README for Windows vs
+# Linux notes; audio device passthrough is added in a later milestone).
+
+services:
+  stt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn stt.app:app --host 0.0.0.0 --port 8001
+    env_file: .env
+    ports:
+      - "${STT_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  tts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn tts.app:app --host 0.0.0.0 --port 8002
+    env_file: .env
+    ports:
+      - "${TTS_PORT:-8002}:8002"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn orchestrator.app:app --host 0.0.0.0 --port 8000
+    env_file: .env
+    environment:
+      # Reach siblings by compose service name instead of localhost.
+      STT_BASE_URL: http://stt:8001
+      TTS_BASE_URL: http://tts:8002
+    ports:
+      - "${ORCHESTRATOR_PORT:-8000}:8000"
+    depends_on:
+      stt:
+        condition: service_healthy
+      tts:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
