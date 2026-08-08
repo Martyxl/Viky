@@ -225,7 +225,16 @@ state-machine timeouts, and tool endpoints.
 | `VIKY_WAKEWORD_FALLBACK` | `true`                 | `false`                                     |
 
 > On 8 GB VRAM do **not** run a local LLM alongside Whisper — use the Claude
-> API in dev. The full checklist is finalized in M7.
+> API in dev.
+
+**Migration procedure (DEV → PROD):**
+
+1. Copy the repo + your `.env` to the PROD machine; `pip install -r requirements.txt` and the per-service `requirements-*.txt`.
+2. Edit `.env` only — apply the table above (`WHISPER_MODEL=large-v3`, `WHISPER_DEVICE=cuda`, local `LLM_MODEL`/`LLM_API_BASE`, `VIKY_WAKEWORD_MODEL=…/viky.onnx`, `VIKY_WAKEWORD_FALLBACK=false`).
+3. Start the local LLM (LM Studio / Ollama) and point `LLM_API_BASE` at it; confirm `python scripts/chat.py "Ahoj"` answers.
+4. `python scripts/download_voice.py` (voice) — Whisper downloads on first run.
+5. Flip `VIKY_DRY_RUN=false` only once n8n webhooks and the stats backend are wired and verified.
+6. `pytest` should stay green (config/health/tools/state-machine run without hardware). Then `python scripts/viky.py` for the live loop.
 
 ## Audio: Windows vs Linux
 
@@ -257,7 +266,10 @@ integration test.
 - [x] **M4 — Wake word:** openWakeWord loop + earcon, `hey_jarvis` fallback, config flag to swap in `viky.onnx`; `scripts/wakeword_listen.py`.
 - [x] **M5 — Brain:** LiteLLM tool-calling + Czech system prompt + 6 tools (dry-run) + mock stats server; `scripts/chat.py`.
 - [x] **M6 — Orchestrator:** state machine (barge-in, follow-up, timeout, JSON turn logs); `scripts/viky.py` end-to-end voice.
-- [ ] **M7 — Hardening:** barge-in, follow-up, structured logging, tests, migration checklist.
+- [x] **M7 — Hardening:** graceful shutdown (SIGINT/SIGTERM), WAV→transcript→mock-LLM→WAV integration test, finalized DEV→PROD migration procedure.
+
+**All milestones complete.** 33 tests passing (config, health, TTS, STT, VAD,
+wake word, tools, brain, orchestrator, integration).
 
 ## Design rules
 

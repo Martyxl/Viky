@@ -14,6 +14,7 @@ tests/test_orchestrator.py.
 
 from __future__ import annotations
 
+import signal
 import sys
 import threading
 from pathlib import Path
@@ -192,11 +193,26 @@ def main() -> int:
     if label != "viky":
         print("(fallback wake word — po natrénování nastav VIKY_WAKEWORD_MODEL na viky.onnx)")
 
+    # Graceful shutdown: on SIGINT/SIGTERM stop the loop and the mic threads.
+    def _shutdown(signum, _frame):
+        log.info("signal %s — ukončuji", signum)
+        orch.stop()
+        audio.request_stop()
+
+    signal.signal(signal.SIGINT, _shutdown)
+    try:
+        signal.signal(signal.SIGTERM, _shutdown)
+    except (AttributeError, ValueError):
+        pass  # SIGTERM not settable on some Windows setups
+
     try:
         orch.run()
     except KeyboardInterrupt:
-        print("\nViky: Tak zatím, Marty.")
+        orch.stop()
         audio.request_stop()
+    finally:
+        audio._stop_barge()
+        print("\nViky: Tak zatím, Marty.")
     return 0
 
 
