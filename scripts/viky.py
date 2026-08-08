@@ -62,15 +62,13 @@ class RealAudio:
 
     # -- WakeSource -------------------------------------------------------- #
     def wait_for_wake(self) -> bool:
+        from common.audio import ResamplingMicReader
+
         self._stop_barge()
         self.detector.reset()
-        with self._sd.InputStream(
-            samplerate=self._ww_sr, channels=1, dtype="int16",
-            blocksize=self._ww_frame, device=self._dev,
-        ) as stream:
+        with ResamplingMicReader(self._dev, out_sr=self._ww_sr, out_block=self._ww_frame) as mic:
             while not self._stop:
-                block, _ = stream.read(self._ww_frame)
-                if self.detector.detect(block.reshape(-1)):
+                if self.detector.detect(mic.read_int16()):
                     return True
         return False
 
@@ -85,15 +83,13 @@ class RealAudio:
         return self._barge_flag.is_set()
 
     def _barge_loop(self) -> None:
+        from common.audio import ResamplingMicReader
+
         try:
             self.detector.reset()
-            with self._sd.InputStream(
-                samplerate=self._ww_sr, channels=1, dtype="int16",
-                blocksize=self._ww_frame, device=self._dev,
-            ) as stream:
+            with ResamplingMicReader(self._dev, out_sr=self._ww_sr, out_block=self._ww_frame) as mic:
                 while not self._barge_stop.is_set():
-                    block, _ = stream.read(self._ww_frame)
-                    if self.detector.detect(block.reshape(-1)):
+                    if self.detector.detect(mic.read_int16()):
                         self._barge_flag.set()
                         return
         except Exception as exc:  # noqa: BLE001
@@ -108,23 +104,20 @@ class RealAudio:
     # -- Recorder ---------------------------------------------------------- #
     def record_utterance(self, timeout_s: float) -> Optional[np.ndarray]:
         self._stop_barge()
+        from common.audio import ResamplingMicReader, peak_normalize
         from stt.vad import FRAME_SAMPLES, SILERO_SR, UtteranceCollector
 
         collector = UtteranceCollector()
         frames_seen = 0
         max_frames = int(timeout_s * SILERO_SR / FRAME_SAMPLES)
-        with self._sd.InputStream(
-            samplerate=SILERO_SR, channels=1, dtype="float32",
-            blocksize=FRAME_SAMPLES, device=self._dev,
-        ) as stream:
+        with ResamplingMicReader(self._dev, out_sr=SILERO_SR, out_block=FRAME_SAMPLES) as mic:
             while frames_seen < max_frames or collector._in_speech:
                 if self._stop:
                     return None
-                block, _ = stream.read(FRAME_SAMPLES)
-                audio = collector.push(block.reshape(-1))
+                audio = collector.push(mic.read())
                 frames_seen += 1
                 if audio is not None:
-                    return audio
+                    return peak_normalize(audio)  # lift quiet mics before STT
         return None
 
 
@@ -179,15 +172,28 @@ def main() -> int:
     ensure_earcons()
     print("Viky se probouzí... (načítám modely)")
     audio = RealAudio()
+    transcriber = RealTranscriber()
+    speaker = RealSpeaker()
     orch = VikyOrchestrator(
         wake=audio,
         recorder=audio,
-        transcriber=RealTranscriber(),
+        transcriber=transcriber,
         brain=Brain(),
-        speaker=RealSpeaker(),
+        speaker=speaker,
         on_state=lambda s: print(f"  [{s.value}]"),
         play_earcon=play,
     )
+
+    # Warm up everything NOW so the first turn doesn't stall mid-conversation
+    # (previously Silero VAD + Whisper loaded lazily on the first utterance,
+    # which swallowed the user's first question).
+    print("Zahřívám modely (VAD, Whisper, hlas)...")
+    from stt.vad import UtteranceCollector
+
+    UtteranceCollector()  # load Silero VAD
+    transcriber.transcribe(np.zeros(8000, dtype=np.float32))  # load Whisper
+    _ = speaker._engine.sample_rate  # load Piper voice
+
     label = audio.detector.label
     print(f"Připravena. Řekni '{label}' pro probuzení. Ctrl-C ukončí.")
     if label != "viky":

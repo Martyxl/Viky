@@ -29,8 +29,7 @@ from stt.vad import FRAME_SAMPLES, SILERO_SR  # noqa: E402
 
 def _record_utterance(timeout_s: float) -> np.ndarray:
     """Block until one utterance is captured (or timeout with no speech)."""
-    import sounddevice as sd
-
+    from common.audio import ResamplingMicReader, peak_normalize
     from stt.vad import UtteranceCollector
 
     collector = UtteranceCollector()
@@ -38,26 +37,18 @@ def _record_utterance(timeout_s: float) -> np.ndarray:
     dev = int(device) if (device and str(device).isdigit()) else device
 
     print("[listen] mluv... (poslouchám)")
-    captured: dict = {"audio": None}
     frames_seen = 0
     max_frames = int(timeout_s * SILERO_SR / FRAME_SAMPLES)
 
-    with sd.InputStream(
-        samplerate=SILERO_SR, channels=1, dtype="float32", blocksize=FRAME_SAMPLES, device=dev
-    ) as stream:
+    with ResamplingMicReader(dev, out_sr=SILERO_SR, out_block=FRAME_SAMPLES) as mic:
         while frames_seen < max_frames or collector._in_speech:
-            block, _ = stream.read(FRAME_SAMPLES)
-            frame = block.reshape(-1)
-            audio = collector.push(frame)
+            audio = collector.push(mic.read())
             frames_seen += 1
             if audio is not None:
-                captured["audio"] = audio
-                break
+                return peak_normalize(audio)
 
-    if captured["audio"] is None:
-        print("[listen] (ticho — nic nezachyceno)")
-        return np.zeros(0, dtype=np.float32)
-    return captured["audio"]
+    print("[listen] (ticho — nic nezachyceno)")
+    return np.zeros(0, dtype=np.float32)
 
 
 def _float_to_wav_bytes(audio: np.ndarray, sr: int = SILERO_SR) -> bytes:
