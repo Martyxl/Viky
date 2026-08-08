@@ -155,6 +155,32 @@ VIKY_WAKEWORD_FALLBACK=false
 Earcons live in `orchestrator/sounds/` (`wake.wav`, `timeout.wav`); they are
 generated on first run if missing.
 
+## Brain & tools (M5)
+
+Viky's "brain" routes through **LiteLLM** (provider-agnostic — no `anthropic`
+SDK in the code) and calls tools. The persona lives in
+[brain/system_prompt.md](brain/system_prompt.md) (spoken-style Czech).
+
+Tools (JSON schemas in [brain/tools.py](brain/tools.py), implementations in
+`tools/`): `get_time`, `get_trading_stats`, `trigger_n8n_workflow`,
+`send_email`, `list_agents`, `run_agent`. Side-effecting tools honour
+`VIKY_DRY_RUN=true` (default) — they log the intended call and return a
+simulated result instead of doing it.
+
+```bash
+# Optional: run the mock stats backend so get_trading_stats has real data
+uvicorn tools.mock_stats:app --port 8010 &
+
+# Chat with Viky in text (needs LLM_* in .env, e.g. Claude key):
+python scripts/chat.py "Kolik je hodin?"
+python scripts/chat.py "Jaká je dnešní statistika na MNQ?"
+python scripts/chat.py                      # interactive REPL
+```
+
+> `LLM_MODEL` must be a LiteLLM id with a provider prefix
+> (`anthropic/claude-sonnet-4-5`, `openai/qwen3-30b-a3b`, …). Set `LLM_API_KEY`
+> (or `ANTHROPIC_API_KEY`). Swapping Claude ↔ local Qwen3 is a `.env` change.
+
 ## Configuration
 
 Everything is driven by `.env` (see `.env.example` for the full annotated
@@ -206,7 +232,7 @@ integration test.
 - [x] **M2 — TTS:** Piper streams Czech audio from the female voice; `scripts/say.py` + `scripts/download_voice.py`.
 - [x] **M3 — STT:** faster-whisper (forced Czech) + Silero VAD end-of-utterance; `scripts/listen.py`.
 - [x] **M4 — Wake word:** openWakeWord loop + earcon, `hey_jarvis` fallback, config flag to swap in `viky.onnx`; `scripts/wakeword_listen.py`.
-- [ ] **M5 — Brain:** LiteLLM + system prompt + tool schemas (dry-run); `scripts/chat.py`.
+- [x] **M5 — Brain:** LiteLLM tool-calling + Czech system prompt + 6 tools (dry-run) + mock stats server; `scripts/chat.py`.
 - [ ] **M6 — Orchestrator:** full state machine; end-to-end voice.
 - [ ] **M7 — Hardening:** barge-in, follow-up, structured logging, tests, migration checklist.
 

@@ -84,7 +84,9 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # LLM — everything through LiteLLM, OpenAI-compatible (M5)
     # ------------------------------------------------------------------ #
-    llm_model: str = Field(default="claude-sonnet-4-5", alias="LLM_MODEL")
+    # LiteLLM model id — needs a provider prefix (e.g. "anthropic/claude-...",
+    # "openai/qwen3-...") so LiteLLM routes to the right backend.
+    llm_model: str = Field(default="anthropic/claude-sonnet-4-5", alias="LLM_MODEL")
     llm_api_base: str = Field(default="", alias="LLM_API_BASE")
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
     llm_temperature: float = Field(default=0.4, alias="LLM_TEMPERATURE")
