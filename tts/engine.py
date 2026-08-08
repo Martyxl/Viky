@@ -70,8 +70,40 @@ class TTSEngine:
         text = (text or "").strip()
         if not text:
             return
+
+        # Mixed CZ/EN path: only when enabled and the text actually contains a
+        # known English term (otherwise use Piper's normal, faster path).
+        if settings.tts_english_pronunciation:
+            try:
+                from tts.pronunciation import has_english_terms
+
+                if has_english_terms(text):
+                    yield from self._synthesize_mixed(text)
+                    return
+            except Exception as exc:  # noqa: BLE001 — never break TTS over this
+                log.warning("mixed pronunciation failed, using Czech: %s", exc)
+
         for chunk in self._voice.synthesize(text):
             yield chunk.audio_int16_bytes
+
+    def _synthesize_mixed(self, text: str) -> Iterator[bytes]:
+        """Per-word CZ/EN phonemization; still streams sentence by sentence."""
+        import numpy as np
+
+        from tts.pronunciation import mixed_phonemes, split_sentences
+
+        assert self._voice is not None
+        for sentence in split_sentences(text):
+            phonemes = mixed_phonemes(sentence)
+            if not phonemes:
+                continue
+            ids = self._voice.phonemes_to_ids(phonemes)
+            audio = self._voice.phoneme_ids_to_audio(ids)
+            if isinstance(audio, tuple):
+                audio = audio[0]
+            audio = np.asarray(audio, dtype=np.float32)
+            pcm = (np.clip(audio, -1.0, 1.0) * 32767.0).astype("<i2")
+            yield pcm.tobytes()
 
     def synthesize_wav_bytes(self, text: str) -> bytes:
         """Synthesize the whole utterance into a single in-memory WAV."""

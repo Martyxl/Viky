@@ -1,0 +1,72 @@
+# English words that Viky should pronounce the English way (not Czech-spelled).
+# One word per line, lowercase, no diacritics. Lines starting with # are ignored.
+# Add your own terms here — takes effect on the next run.
+#
+# Words WITH Czech diacritics are always read Czech, so you only need ASCII words.
+# Keep it to genuinely English words; a Czech word listed here would be
+# mispronounced.
+
+# --- trading ---
+trading
+trade
+trader
+trades
+report
+reports
+reporting
+email
+emails
+statistics
+stats
+stop
+loss
+stoploss
+long
+short
+spread
+setup
+backtest
+backtesting
+chart
+charts
+swing
+scalping
+breakout
+trend
+news
+win
+rate
+winrate
+drawdown
+entry
+exit
+target
+risk
+reward
+position
+futures
+ticker
+candle
+support
+resistance
+
+# --- tech / agents ---
+dashboard
+workflow
+workflows
+agent
+agents
+webhook
+prompt
+token
+tokens
+model
+update
+online
+offline
+server
+timeout
+log
+logs
+default
+feedback

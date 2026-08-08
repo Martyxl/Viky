@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     piper_voice_path: str = Field(default="", alias="PIPER_VOICE_PATH")
     piper_binary: str = Field(default="piper", alias="PIPER_BINARY")
     tts_sample_rate: int = Field(default=22050, alias="TTS_SAMPLE_RATE")
+    # Read known English words with English pronunciation (via en-us phonemes)
+    # instead of spelling them out Czech-style. Terms live in tts/english_terms.txt.
+    tts_english_pronunciation: bool = Field(default=True, alias="TTS_ENGLISH_PRONUNCIATION")
 
     # ------------------------------------------------------------------ #
     # Wake word — openWakeWord (M4)

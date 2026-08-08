@@ -101,6 +101,14 @@ The TTS service exposes:
   `X-Sample-Rate`); playback can start before the whole sentence is synthesized.
 - `POST /speak.wav` → the full utterance as one WAV (handy for `curl`).
 
+**English pronunciation:** known English words (trading/tech terms) are read the
+English way instead of being spelled out Czech-style. The Czech voice knows all
+the English phonemes, so each English word is phonemized with `en-us` and the
+rest stays Czech. Edit the word list in
+[tts/english_terms.txt](tts/english_terms.txt) (one word per line); toggle with
+`TTS_ENGLISH_PRONUNCIATION` in `.env`. Words with Czech diacritics are always
+read Czech.
+
 > **Windows + diacritics:** set `PYTHONUTF8=1` before running CLI scripts so
 > Czech characters in command-line arguments are decoded as UTF-8. (The HTTP
 > path is UTF-8 already — this only affects `argv`.)
