@@ -181,6 +181,29 @@ python scripts/chat.py                      # interactive REPL
 > (`anthropic/claude-sonnet-4-5`, `openai/qwen3-30b-a3b`, …). Set `LLM_API_KEY`
 > (or `ANTHROPIC_API_KEY`). Swapping Claude ↔ local Qwen3 is a `.env` change.
 
+## End-to-end voice (M6)
+
+Everything wired together — say the wake word, ask in Czech, hear the answer:
+
+```bash
+python scripts/viky.py
+```
+
+State machine: `IDLE → LISTENING → TRANSCRIBING → THINKING → SPEAKING → …`
+- **Wake** → earcon → record until you stop talking (Silero VAD).
+- **Transcribe** (Czech) → **brain** (LiteLLM + tools) → **speak** (streamed).
+- **Follow-up:** after a reply Viky keeps listening for `FOLLOWUP_WINDOW_S`
+  without the wake word.
+- **Barge-in:** say the wake word while Viky is speaking to cut her off and ask
+  again immediately.
+- **Timeout:** silence in LISTENING returns to IDLE (timeout earcon).
+- Every turn is logged as JSON to `logs/turns-YYYYMMDD.jsonl` (future stats).
+
+> Needs a mic, speakers, and `LLM_*` set in `.env`. The state-machine logic is
+> unit-tested with fakes (`tests/test_orchestrator.py`); the live audio runner
+> (`scripts/viky.py`) needs hardware. A single input stream is opened at a time
+> to avoid device contention (wake, record, and barge-in never overlap).
+
 ## Configuration
 
 Everything is driven by `.env` (see `.env.example` for the full annotated
@@ -233,7 +256,7 @@ integration test.
 - [x] **M3 — STT:** faster-whisper (forced Czech) + Silero VAD end-of-utterance; `scripts/listen.py`.
 - [x] **M4 — Wake word:** openWakeWord loop + earcon, `hey_jarvis` fallback, config flag to swap in `viky.onnx`; `scripts/wakeword_listen.py`.
 - [x] **M5 — Brain:** LiteLLM tool-calling + Czech system prompt + 6 tools (dry-run) + mock stats server; `scripts/chat.py`.
-- [ ] **M6 — Orchestrator:** full state machine; end-to-end voice.
+- [x] **M6 — Orchestrator:** state machine (barge-in, follow-up, timeout, JSON turn logs); `scripts/viky.py` end-to-end voice.
 - [ ] **M7 — Hardening:** barge-in, follow-up, structured logging, tests, migration checklist.
 
 ## Design rules
