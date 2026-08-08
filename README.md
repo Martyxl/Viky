@@ -125,9 +125,13 @@ python scripts/listen.py --file recording.wav --local
 The STT service exposes `POST /transcribe` — send a WAV as the raw body or as a
 `file` upload; it returns `{text, language, duration_s, latency_ms}`.
 
-> On the dev GPU (RTX 3060 Ti) set `WHISPER_DEVICE=cuda` for a big speed-up; on
-> CPU `medium` runs but is slower. Do **not** run a local LLM alongside Whisper
-> on 8 GB VRAM — use the Claude API in dev (see the migration checklist).
+> **GPU:** set `WHISPER_DEVICE=cuda` in `.env` for a big speed-up (RTX 3060 Ti:
+> `medium` ~0.9 s vs ~5 s on CPU). Needs the NVIDIA CUDA 12 runtime — install
+> `nvidia-cublas-cu12 nvidia-cudnn-cu12` (in `requirements-stt.txt`); on Windows
+> `common/cuda.py` auto-registers their DLLs so no PATH tweaking is needed. The
+> **model itself is downloaded automatically** by faster-whisper (CTranslate2
+> format) — do **not** download GGUF Whisper models, those are a different
+> runtime (whisper.cpp). Do not run a local LLM alongside Whisper on 8 GB VRAM.
 
 ## Wake word (M4)
 

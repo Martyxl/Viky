@@ -39,6 +39,11 @@ class STTEngine:
         with self._lock:
             if self._model is not None:
                 return
+            # Make bundled CUDA DLLs loadable on Windows before touching CUDA.
+            if settings.whisper_device in ("cuda", "auto"):
+                from common.cuda import ensure_cuda_dlls
+
+                ensure_cuda_dlls()
             from faster_whisper import WhisperModel
 
             log.info(
