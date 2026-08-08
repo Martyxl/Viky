@@ -15,6 +15,7 @@ from typing import Optional
 
 from brain.tools import openai_tools
 from common.logging import get_logger
+from common.text import sanitize_text
 from config.settings import settings
 from tools.registry import dispatch
 
@@ -73,6 +74,7 @@ class Brain:
         }
 
     def chat(self, user_text: str, history: Optional[list[dict]] = None) -> BrainReply:
+        user_text = sanitize_text(user_text)
         messages: list[dict] = [{"role": "system", "content": self.system_prompt}]
         if history:
             messages.extend(history)

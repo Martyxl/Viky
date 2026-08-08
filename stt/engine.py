@@ -15,6 +15,7 @@ from typing import Optional, Union
 import numpy as np
 
 from common.logging import get_logger
+from common.text import sanitize_text
 from config.settings import settings
 
 log = get_logger("stt.engine")
@@ -67,9 +68,15 @@ class STTEngine:
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": settings.vad_silence_ms},
             beam_size=5,
+            temperature=0.0,
+            # Anti-hallucination: don't carry context between segments, and drop
+            # low-confidence / no-speech output (Whisper invents text on noise).
+            condition_on_previous_text=False,
+            no_speech_threshold=0.6,
+            log_prob_threshold=-1.0,
         )
         # segments is a generator; consuming it runs the decode.
-        text = "".join(seg.text for seg in segments).strip()
+        text = sanitize_text("".join(seg.text for seg in segments))
         latency_ms = (time.perf_counter() - t0) * 1000.0
         return Transcript(
             text=text,
