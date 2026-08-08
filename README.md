@@ -105,6 +105,30 @@ The TTS service exposes:
 > Czech characters in command-line arguments are decoded as UTF-8. (The HTTP
 > path is UTF-8 already — this only affects `argv`.)
 
+## Make Viky listen (M3)
+
+STT uses **faster-whisper** (`medium`/`int8` in dev) forced to Czech, with
+**Silero VAD** detecting the end of an utterance.
+
+```bash
+# First run downloads the Whisper model (~1.5 GB, cached in ~/.cache/huggingface).
+# Speak into the mic; recording stops after ~VAD_SILENCE_MS of silence:
+python scripts/listen.py
+
+# Transcribe a WAV without a mic:
+python scripts/listen.py --file recording.wav
+
+# Transcribe in-process (no server):
+python scripts/listen.py --file recording.wav --local
+```
+
+The STT service exposes `POST /transcribe` — send a WAV as the raw body or as a
+`file` upload; it returns `{text, language, duration_s, latency_ms}`.
+
+> On the dev GPU (RTX 3060 Ti) set `WHISPER_DEVICE=cuda` for a big speed-up; on
+> CPU `medium` runs but is slower. Do **not** run a local LLM alongside Whisper
+> on 8 GB VRAM — use the Claude API in dev (see the migration checklist).
+
 ## Configuration
 
 Everything is driven by `.env` (see `.env.example` for the full annotated
@@ -154,7 +178,7 @@ integration test.
 
 - [x] **M1 — Skeleton:** structure, config, `.env.example`, docker-compose, README; all services answer `/health`.
 - [x] **M2 — TTS:** Piper streams Czech audio from the female voice; `scripts/say.py` + `scripts/download_voice.py`.
-- [ ] **M3 — STT:** faster-whisper + VAD; `scripts/listen.py`.
+- [x] **M3 — STT:** faster-whisper (forced Czech) + Silero VAD end-of-utterance; `scripts/listen.py`.
 - [ ] **M4 — Wake word:** detection loop + earcon; swap in `viky.onnx`.
 - [ ] **M5 — Brain:** LiteLLM + system prompt + tool schemas (dry-run); `scripts/chat.py`.
 - [ ] **M6 — Orchestrator:** full state machine; end-to-end voice.
