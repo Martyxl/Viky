@@ -24,6 +24,8 @@ voices/
 logs/
 *.log
 *.wav
+# ...but keep the small generated earcons (committed for convenience)
+!orchestrator/sounds/*.wav
 
 # OS / editor
 .DS_Store

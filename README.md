@@ -129,6 +129,32 @@ The STT service exposes `POST /transcribe` — send a WAV as the raw body or as 
 > CPU `medium` runs but is slower. Do **not** run a local LLM alongside Whisper
 > on 8 GB VRAM — use the Claude API in dev (see the migration checklist).
 
+## Wake word (M4)
+
+Viky listens for a wake word before recording. Until you train `viky.onnx`, a
+pre-trained **fallback** model is used (`hey_jarvis` by default).
+
+```bash
+# Continuously listen; beeps (earcon) on each detection. Say "Hey Jarvis":
+python scripts/wakeword_listen.py
+python scripts/wakeword_listen.py --debug     # print live scores while tuning
+```
+
+openWakeWord models download automatically on first use. To switch to your own
+model, set in `.env`:
+
+```bash
+VIKY_WAKEWORD_MODEL=path/to/viky.onnx
+VIKY_WAKEWORD_FALLBACK=false
+```
+
+> **Training `viky.onnx`:** use the openWakeWord training notebook in Google
+> Colab (record samples of the word "Viky", ~15–30 min). Drop the resulting
+> `.onnx` in and point `VIKY_WAKEWORD_MODEL` at it — no code change.
+
+Earcons live in `orchestrator/sounds/` (`wake.wav`, `timeout.wav`); they are
+generated on first run if missing.
+
 ## Configuration
 
 Everything is driven by `.env` (see `.env.example` for the full annotated
@@ -179,7 +205,7 @@ integration test.
 - [x] **M1 — Skeleton:** structure, config, `.env.example`, docker-compose, README; all services answer `/health`.
 - [x] **M2 — TTS:** Piper streams Czech audio from the female voice; `scripts/say.py` + `scripts/download_voice.py`.
 - [x] **M3 — STT:** faster-whisper (forced Czech) + Silero VAD end-of-utterance; `scripts/listen.py`.
-- [ ] **M4 — Wake word:** detection loop + earcon; swap in `viky.onnx`.
+- [x] **M4 — Wake word:** openWakeWord loop + earcon, `hey_jarvis` fallback, config flag to swap in `viky.onnx`; `scripts/wakeword_listen.py`.
 - [ ] **M5 — Brain:** LiteLLM + system prompt + tool schemas (dry-run); `scripts/chat.py`.
 - [ ] **M6 — Orchestrator:** full state machine; end-to-end voice.
 - [ ] **M7 — Hardening:** barge-in, follow-up, structured logging, tests, migration checklist.
