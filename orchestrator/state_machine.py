@@ -131,22 +131,37 @@ class VikyOrchestrator:
 
         self._set_state(State.THINKING)
         t0 = time.perf_counter()
-        reply = self.brain.chat(transcript, history=self.history[-8:])
+        try:
+            reply = self.brain.chat(transcript, history=self.history[-8:])
+            reply_text = (reply.reply or "").strip()
+            tool_calls = getattr(reply, "tool_calls", [])
+        except Exception as exc:  # noqa: BLE001 — an LLM/API error must not kill Viky
+            log.exception("brain failed")
+            reply_text = "Promiň, něco se mi teď nepovedlo. Zkus to prosím znovu."
+            tool_calls = []
+        if not reply_text:
+            # Never speak or store an empty turn — an empty assistant message
+            # makes the next LLM call fail.
+            reply_text = "Promiň, tomu jsem nerozuměla."
         lat["llm_ms"] = round((time.perf_counter() - t0) * 1000, 1)
 
         self.history.append({"role": "user", "content": transcript})
-        self.history.append({"role": "assistant", "content": reply.reply})
+        self.history.append({"role": "assistant", "content": reply_text})
 
         self._set_state(State.SPEAKING)
         self.wake.arm()
         t0 = time.perf_counter()
-        interrupted = self.speaker.speak(reply.reply, interrupt_check=self.wake.barge_in_detected)
+        try:
+            interrupted = self.speaker.speak(reply_text, interrupt_check=self.wake.barge_in_detected)
+        except Exception as exc:  # noqa: BLE001 — audio errors must not kill Viky
+            log.exception("speak failed")
+            interrupted = False
         lat["tts_ms"] = round((time.perf_counter() - t0) * 1000, 1)
 
         result = TurnResult(
             transcript=transcript,
-            reply=reply.reply,
-            tool_calls=getattr(reply, "tool_calls", []),
+            reply=reply_text,
+            tool_calls=tool_calls,
             interrupted=interrupted,
             latency_ms=lat,
         )
