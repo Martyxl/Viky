@@ -87,21 +87,31 @@ class TTSEngine:
             yield chunk.audio_int16_bytes
 
     def _synthesize_mixed(self, text: str) -> Iterator[bytes]:
-        """Per-word CZ/EN phonemization; still streams sentence by sentence."""
+        """Mixed CZ/EN phonemization; streams sentence by sentence.
+
+        Uses the voice's own SynthesisConfig and the same peak-normalization as
+        PiperVoice.synthesize so Czech sounds identical to the normal path.
+        """
         import numpy as np
+        from piper.config import SynthesisConfig
 
         from tts.pronunciation import mixed_phonemes, split_sentences
 
         assert self._voice is not None
+        syn = SynthesisConfig()  # None fields -> the model's trained defaults
         for sentence in split_sentences(text):
             phonemes = mixed_phonemes(sentence)
             if not phonemes:
                 continue
             ids = self._voice.phonemes_to_ids(phonemes)
-            audio = self._voice.phoneme_ids_to_audio(ids)
+            audio = self._voice.phoneme_ids_to_audio(ids, syn)
             if isinstance(audio, tuple):
                 audio = audio[0]
             audio = np.asarray(audio, dtype=np.float32)
+            # Match synthesize(): normalize each sentence to full scale.
+            max_val = float(np.max(np.abs(audio))) if audio.size else 0.0
+            if max_val > 1e-8:
+                audio = audio / max_val
             pcm = (np.clip(audio, -1.0, 1.0) * 32767.0).astype("<i2")
             yield pcm.tobytes()
 

@@ -75,20 +75,48 @@ def has_english_terms(text: str) -> bool:
     )
 
 
+def language_runs(text: str) -> list[tuple[str, str]]:
+    """Group text into maximal contiguous (language, segment) runs.
+
+    Whitespace/punctuation/digits attach to the current run, so Czech words stay
+    together and get phonemized as whole phrases (proper prosody). Only genuinely
+    English words split a run off.
+    """
+    runs: list[tuple[str, str]] = []
+    cur_lang: Optional[str] = None
+    cur: list[str] = []
+    for tok in _TOKEN_RE.findall(text):
+        lang = _classify(tok) if any(ch.isalpha() for ch in tok) else None
+        if lang is None:
+            cur.append(tok)  # neutral: stays in the current run
+            continue
+        if cur_lang is None:
+            cur_lang = lang
+        if lang != cur_lang:
+            runs.append((cur_lang, "".join(cur)))
+            cur = []
+            cur_lang = lang
+        cur.append(tok)
+    if cur:
+        runs.append((cur_lang or "cs", "".join(cur)))
+    return runs
+
+
 def mixed_phonemes(text: str) -> list[str]:
-    """Phonemize `text` word-by-word, switching espeak voice per word."""
+    """Phonemize `text`, switching espeak voice per contiguous language run."""
     ph = _get_phonemizer()
     out: list[str] = []
-    for tok in _TOKEN_RE.findall(text):
-        if tok.isspace():
-            out.append(" ")
+    for lang, seg in language_runs(text):
+        if not seg.strip():
+            out.extend(list(seg))
             continue
-        if not any(ch.isalpha() for ch in tok):
-            out.extend(list(tok))
-            continue
-        lang = _classify(tok)
-        for sentence in ph.phonemize(lang, tok):
+        for sentence in ph.phonemize(lang, seg):
             out.extend(sentence)
+        if out and out[-1] != " ":
+            out.append(" ")
+    # drop trailing filler space
+    while out and out[-1] == " ":
+        out.pop()
     return out
 
 
