@@ -207,7 +207,32 @@ python scripts/viky_ui.py     # starts the server + opens the orb UI in a window
 Or **double-click `Viky.bat`**. The UI opens in Edge/Chrome "app mode" (no
 browser chrome) so it looks like a native app. Server code: [webui/app.py](webui/app.py);
 front-end: [webui/static/index.html](webui/static/index.html). Configure the
-port with `VIKY_UI_PORT` (default 8080).
+port with `VIKY_UI_PORT` (default 8080). Relaunch is safe — if Viky is already
+running it just opens the window; a stale process holding the port is freed.
+
+### Talk from a phone (push-to-talk)
+
+Tap the 🎙️ button and speak — the browser records, sends the audio to
+`POST /api/utterance` (STT → brain → TTS) and plays Viky's spoken reply back;
+the orb ripples with the real voice. Works on the PC and on a phone on the LAN.
+
+Browsers only allow microphone access over **HTTPS** (or localhost), so for the
+phone you must serve over https:
+
+```bash
+python scripts/make_cert.py     # one-time self-signed cert for your LAN IP
+```
+
+Then set `VIKY_UI_HOST=0.0.0.0` in `.env`, launch, and open
+`https://<PC-IP>:<port>` on the phone (same Wi-Fi). Accept the one-time "not
+trusted" warning (self-signed). Allow inbound on the port through the firewall
+(run as Admin): `New-NetFirewallRule -DisplayName "Viky UI" -Direction Inbound
+-LocalPort 8080 -Protocol TCP -Action Allow -Profile Any`, and make sure the
+network profile is **Private** (`Set-NetConnectionProfile -InterfaceAlias
+Ethernet -NetworkCategory Private`).
+
+> The phone is a full client (talk + listen). Remote access from outside the
+> home needs a secure tunnel (e.g. Tailscale) — that's on the roadmap.
 
 ## End-to-end voice (M6)
 

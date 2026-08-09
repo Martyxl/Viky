@@ -50,3 +50,25 @@ def test_hub_snapshot_updates():
     h.publish({"state": "SPEAKING", "reply": "ahoj"})
     assert h.snapshot["state"] == "SPEAKING"
     assert h.snapshot["reply"] == "ahoj"
+
+
+def test_utterance_endpoint(client, monkeypatch):
+    """POST audio -> STT -> brain -> TTS returns WAV + transcript/reply headers."""
+    import webui.app as appmod
+
+    def fake_process(audio_bytes):
+        return "kolik je hodin", "Je deset hodin.", b"RIFFfake-wav-bytes"
+
+    monkeypatch.setattr(appmod, "_process_utterance", fake_process)
+    r = client.post("/api/utterance", content=b"audio-bytes")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "audio/wav"
+    from urllib.parse import unquote
+    assert unquote(r.headers["x-transcript"]) == "kolik je hodin"
+    assert unquote(r.headers["x-reply"]) == "Je deset hodin."
+    assert r.content.startswith(b"RIFF")
+
+
+def test_utterance_empty_body(client):
+    r = client.post("/api/utterance", content=b"")
+    assert r.status_code == 422

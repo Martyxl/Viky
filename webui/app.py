@@ -15,11 +15,15 @@ import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from urllib.parse import quote
+
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from common.logging import get_logger, setup_logging
+from common.text import sanitize_text
 from config.settings import settings
 
 log = get_logger("webui")
@@ -90,6 +94,56 @@ app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 @app.get("/health")
 def health() -> dict:
     return {"service": "webui", "status": "ok", "clients": len(hub.clients)}
+
+
+# --- Push-to-talk: process one utterance from a browser (phone) mic --------- #
+_phone_brain = None
+_phone_history: list[dict] = []
+_process_lock = threading.Lock()
+
+
+def _process_utterance(audio_bytes: bytes) -> tuple[str, str, bytes]:
+    """STT -> brain -> TTS for a recorded browser utterance (blocking)."""
+    import io
+
+    global _phone_brain
+    from brain.llm import Brain
+    from stt.engine import get_engine as stt_engine
+    from tts.engine import get_engine as tts_engine
+
+    with _process_lock:
+        hub.publish({"state": "TRANSCRIBING", "transcript": "", "reply": ""})
+        transcript = sanitize_text(stt_engine().transcribe(io.BytesIO(audio_bytes)).text)
+        if not transcript:
+            hub.publish({"state": "IDLE"})
+            return "", "", b""
+        hub.publish({"state": "THINKING", "transcript": transcript})
+
+        if _phone_brain is None:
+            _phone_brain = Brain()
+        reply = _phone_brain.chat(transcript, history=_phone_history[-8:]).reply
+        _phone_history.append({"role": "user", "content": transcript})
+        _phone_history.append({"role": "assistant", "content": reply})
+
+        hub.publish({"state": "SPEAKING", "reply": reply})
+        wav = tts_engine().synthesize_wav_bytes(reply)
+        hub.publish({"state": "IDLE"})
+        return transcript, reply, wav
+
+
+@app.post("/api/utterance")
+async def utterance(request: Request) -> Response:
+    audio = await request.body()
+    if not audio:
+        return Response(status_code=422, content=b"no audio")
+    transcript, reply, wav = await run_in_threadpool(_process_utterance, audio)
+    headers = {
+        "X-Transcript": quote(transcript),
+        "X-Reply": quote(reply),
+    }
+    if not wav:
+        return Response(status_code=204, headers=headers)
+    return Response(content=wav, media_type="audio/wav", headers=headers)
 
 
 @app.websocket("/ws")
