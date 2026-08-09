@@ -193,6 +193,22 @@ python scripts/chat.py                      # interactive REPL
 > (`anthropic/claude-sonnet-4-5`, `openai/qwen3-30b-a3b`, …). Set `LLM_API_KEY`
 > (or `ANTHROPIC_API_KEY`). Swapping Claude ↔ local Qwen3 is a `.env` change.
 
+## Graphical app (web UI)
+
+A futuristic orb interface (glowing teal sphere that reacts to Viky's state,
+with live transcript + reply). The voice orchestrator runs inside the web
+server and streams state/transcript/reply/audio-level to the browser over
+WebSocket.
+
+```bash
+python scripts/viky_ui.py     # starts the server + opens the orb UI in a window
+```
+
+Or **double-click `Viky.bat`**. The UI opens in Edge/Chrome "app mode" (no
+browser chrome) so it looks like a native app. Server code: [webui/app.py](webui/app.py);
+front-end: [webui/static/index.html](webui/static/index.html). Configure the
+port with `VIKY_UI_PORT` (default 8080).
+
 ## End-to-end voice (M6)
 
 Everything wired together — say the wake word, ask in Czech, hear the answer:

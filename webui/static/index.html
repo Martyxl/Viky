@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Viky</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #04080a; overflow: hidden;
+    font-family: "Segoe UI", system-ui, sans-serif; color: #bfeee6; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .hud { position: fixed; left: 0; right: 0; pointer-events: none; }
+  .top { top: 30px; text-align: center; }
+  .brand { font-size: 20px; letter-spacing: 12px; font-weight: 300; opacity: .8; }
+  .brand b { font-weight: 600; }
+  .state { margin-top: 10px; display: inline-block; font-size: 11px; letter-spacing: 3px;
+    text-transform: uppercase; padding: 5px 16px; border-radius: 999px;
+    border: 1px solid rgba(120,230,210,.18); background: rgba(0,0,0,.2);
+    transition: color .5s, border-color .5s, box-shadow .5s; }
+  .bottom { bottom: 42px; text-align: center; padding: 0 8vw; }
+  .said { font-size: 14px; opacity: .5; min-height: 20px; }
+  .said span { opacity: .95; }
+  .reply { font-size: 23px; font-weight: 300; margin-top: 12px; min-height: 34px; line-height: 1.4;
+    text-shadow: 0 0 26px rgba(45,235,200,.3); }
+
+  .sim { position: fixed; bottom: 18px; right: 18px; display: flex; gap: 8px;
+    pointer-events: auto; opacity: .3; transition: opacity .2s; }
+  .sim:hover { opacity: 1; }
+  .sim button { font: 11px "Segoe UI"; letter-spacing: 1px; color: #bfeee6; cursor: pointer;
+    background: rgba(120,230,210,.05); border: 1px solid rgba(120,230,210,.18);
+    border-radius: 6px; padding: 6px 10px; }
+  .sim button:hover { background: rgba(120,230,210,.15); }
+  .sim .tag { align-self: center; font-size: 10px; opacity: .5; margin-right: 4px; }
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="hud top">
+    <div class="brand">V<b>I</b>KY</div>
+    <div class="state" id="stateChip">idle</div>
+  </div>
+  <div class="hud bottom">
+    <div class="said" id="said"></div>
+    <div class="reply" id="reply"></div>
+  </div>
+
+  <div class="sim" id="sim">
+    <span class="tag">náhled:</span>
+    <button data-s="idle">idle</button>
+    <button data-s="listening">listening</button>
+    <button data-s="thinking">thinking</button>
+    <button data-s="speaking">speaking</button>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const stateChip = document.getElementById('stateChip');
+  const saidEl = document.getElementById('said');
+  const replyEl = document.getElementById('reply');
+
+  // Teal-centric palette; states differ mainly by motion + brightness.
+  const COLORS = {
+    idle:      { r: 26,  g: 150, b: 138 },
+    listening: { r: 40,  g: 224, b: 200 },
+    thinking:  { r: 60,  g: 196, b: 232 },
+    speaking:  { r: 46,  g: 240, b: 190 },
+  };
+
+  let W, H, DPR = Math.min(window.devicePixelRatio || 1, 2), cx, cy, R;
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cx = W / 2; cy = H / 2; R = Math.min(W, H) * 0.5;
+  }
+  window.addEventListener('resize', resize); resize();
+
+  // ---- core dots (golden-angle disc, like the textured centre) -----------
+  const CORE_N = 300, GA = Math.PI * (3 - Math.sqrt(5));
+  const core = [];
+  for (let i = 0; i < CORE_N; i++) {
+    const rr = Math.sqrt(i / CORE_N);
+    core.push({ rr, ang: i * GA, ph: Math.random() * Math.PI * 2, sp: .5 + Math.random() });
+  }
+
+  // ---- floating flecks ----------------------------------------------------
+  const FLECKS = 60, flecks = [];
+  for (let i = 0; i < FLECKS; i++)
+    flecks.push({ a: Math.random()*Math.PI*2, rad: .6+Math.random()*1.4,
+      dist: .5+Math.random()*1.6, sp: .1+Math.random()*.3, ph: Math.random()*6 });
+
+  // ---- state --------------------------------------------------------------
+  let state = 'idle', col = { ...COLORS.idle }, energy = 0, speakLevel = 0, rot = 0;
+  function setState(s) {
+    if (!COLORS[s]) return;
+    state = s; stateChip.textContent = s;
+    const c = COLORS[s];
+    stateChip.style.color = `rgb(${c.r},${c.g},${c.b})`;
+    stateChip.style.borderColor = `rgba(${c.r},${c.g},${c.b},.55)`;
+    stateChip.style.boxShadow = `0 0 22px rgba(${c.r},${c.g},${c.b},.35)`;
+  }
+
+  const NRINGS = 8;
+  let t = 0;
+  function frame() {
+    t += 0.016;
+    const tc = COLORS[state];
+    col.r += (tc.r - col.r) * .05; col.g += (tc.g - col.g) * .05; col.b += (tc.b - col.b) * .05;
+    const tE = state==='idle'?.18 : state==='listening'?.5 : state==='thinking'?.8 : .65;
+    energy += (tE - energy) * .04;
+    const tSpk = state==='speaking' ? (.5+.5*Math.sin(t*13))*(.55+.45*Math.sin(t*4.7)) : 0;
+    speakLevel += (tSpk - speakLevel) * .2;
+    const rotSpeed = state==='thinking'?.5 : state==='listening'?.12 : .05;
+    rot += rotSpeed * .016;
+
+    const cr = col.r|0, cg = col.g|0, cb = col.b|0;
+    ctx.clearRect(0, 0, W, H);
+
+    // background glow behind orb
+    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.15);
+    bg.addColorStop(0, `rgba(${cr},${cg},${cb},.10)`);
+    bg.addColorStop(.5, `rgba(${cr},${cg},${cb},.03)`);
+    bg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    const coreR = R * 0.30;
+    const gap = R * 0.072;
+    const breathe = 1 + 0.03 * Math.sin(t * 1.4);
+
+    // ---- membrane rings ----
+    const SEG = 160;
+    for (let i = 0; i < NRINGS; i++) {
+      const r0 = (coreR + gap * (i + 1)) * breathe;
+      const amp = (R * 0.020) * (0.5 + energy) * (1 + i * 0.12) + speakLevel * R * 0.05 * (1 + i * 0.1);
+      const a = (0.42 * (1 - i / NRINGS) + 0.05) * (0.5 + energy * 0.7);
+      ctx.beginPath();
+      for (let s = 0; s <= SEG; s++) {
+        const th = (s / SEG) * Math.PI * 2;
+        const w = Math.sin(3*th + t*0.9 + i*0.7 + rot*2)
+                + 0.6*Math.sin(5*th - t*1.3 + i*1.9)
+                + 0.4*Math.sin(2*th + t*0.6 - i)
+                + speakLevel * 0.8 * Math.sin(9*th - t*6 + i);
+        const r = r0 + amp * w;
+        const x = cx + Math.cos(th) * r, y = cy + Math.sin(th) * r;
+        s === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = `rgba(${cr},${cg},${cb},${a})`;
+      ctx.lineWidth = i === 0 ? 1.6 : 1.1;
+      ctx.stroke();
+    }
+
+    // ---- textured core ----
+    const pulse = 1 + speakLevel * 0.25 + 0.04 * Math.sin(t * 2);
+    // soft filled sphere
+    const cg2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * pulse);
+    cg2.addColorStop(0, `rgba(${cr},${cg},${cb},.34)`);
+    cg2.addColorStop(.7, `rgba(${cr},${cg},${cb},.10)`);
+    cg2.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = cg2;
+    ctx.beginPath(); ctx.arc(cx, cy, coreR * pulse, 0, Math.PI*2); ctx.fill();
+    // dotted texture
+    for (const d of core) {
+      d.ph += 0.02 * d.sp;
+      const rr = d.rr * coreR * pulse;
+      const ang = d.ang + rot * (0.4 + d.rr * 0.8);
+      const x = cx + Math.cos(ang) * rr, y = cy + Math.sin(ang) * rr;
+      const tw = 0.5 + 0.5 * Math.sin(d.ph * 2);
+      const a = (0.35 + 0.5 * tw) * (0.5 + energy * 0.6);
+      const sz = 0.8 + tw * 1.1 + speakLevel * 1.2;
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},${a})`;
+      ctx.arc(x, y, sz, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(220,255,250,${a*0.5})`;
+      ctx.arc(x, y, sz*0.4, 0, Math.PI*2); ctx.fill();
+    }
+    // rim highlight
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreR * pulse, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${cr},${cg},${cb},${0.3 + energy*0.3})`;
+    ctx.lineWidth = 1.4; ctx.stroke();
+
+    // ---- floating flecks ----
+    for (const f of flecks) {
+      f.a += f.sp * 0.004; f.ph += 0.02;
+      const rr = coreR + f.dist * gap * NRINGS;
+      const x = cx + Math.cos(f.a) * rr, y = cy + Math.sin(f.a) * rr * 0.98;
+      const a = (0.1 + 0.15 * (0.5 + 0.5*Math.sin(f.ph))) * (0.4 + energy);
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},${a})`;
+      ctx.arc(x, y, f.rad, 0, Math.PI*2); ctx.fill();
+    }
+
+    // listening pulse ring
+    if (state === 'listening') {
+      const rr = (coreR + gap * NRINGS) * (1.05 + 0.04 * Math.sin(t * 3));
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(${cr},${cg},${cb},.10)`;
+      ctx.lineWidth = 2; ctx.arc(cx, cy, rr, 0, Math.PI*2); ctx.stroke();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+    requestAnimationFrame(frame);
+  }
+
+  function setSaid(txt) { saidEl.innerHTML = txt ? `„<span>${txt}</span>"` : ''; }
+  function setReply(txt) { replyEl.textContent = txt || ''; }
+
+  // ---- WebSocket (falls back to preview buttons when offline) -------------
+  function connect() {
+    let ws; try { ws = new WebSocket(`ws://${location.host}/ws`); } catch (e) { return; }
+    ws.onmessage = (ev) => { try {
+      const m = JSON.parse(ev.data);
+      if (m.state) setState(m.state.toLowerCase());
+      if (m.transcript !== undefined) setSaid(m.transcript);
+      if (m.reply !== undefined) setReply(m.reply);
+      if (typeof m.level === 'number') speakLevel = m.level;
+    } catch (e) {} };
+    ws.onclose = () => setTimeout(connect, 3000);
+  }
+
+  const demo = {
+    listening: () => { setSaid('Kolik je hodin?'); setReply(''); },
+    thinking:  () => {},
+    speaking:  () => { setReply('Je sobota, čtrnáct hodin třicet sedm. Mám se skvěle.'); },
+    idle:      () => { setSaid(''); },
+  };
+  document.getElementById('sim').addEventListener('click', (e) => {
+    const s = e.target.getAttribute('data-s');
+    if (s) { setState(s); (demo[s] || (()=>{}))(); }
+  });
+
+  setState('idle'); frame(); connect();
+})();
+</script>
+</body>
+</html>

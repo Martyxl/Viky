@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     tts_port: int = Field(default=8002, alias="TTS_PORT")
     orchestrator_host: str = Field(default="127.0.0.1", alias="ORCHESTRATOR_HOST")
     orchestrator_port: int = Field(default=8000, alias="ORCHESTRATOR_PORT")
+    webui_host: str = Field(default="127.0.0.1", alias="VIKY_UI_HOST")
+    webui_port: int = Field(default=8080, alias="VIKY_UI_PORT")
 
     # URLs the orchestrator uses to reach the sibling services. Under
     # docker-compose these are overridden to service names (http://stt:8001).

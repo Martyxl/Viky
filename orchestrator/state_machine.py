@@ -92,6 +92,7 @@ class VikyOrchestrator:
         speaker: Speaker,
         on_state: Optional[Callable[[State], None]] = None,
         play_earcon: Optional[Callable[[str], None]] = None,
+        on_event: Optional[Callable[[dict], None]] = None,
     ) -> None:
         self.wake = wake
         self.recorder = recorder
@@ -99,6 +100,7 @@ class VikyOrchestrator:
         self.brain = brain
         self.speaker = speaker
         self._on_state = on_state
+        self._on_event = on_event
         self._play_earcon = play_earcon or (lambda name: None)
 
         self.state = State.IDLE
@@ -113,6 +115,14 @@ class VikyOrchestrator:
         log.debug("state -> %s", s.value)
         if self._on_state:
             self._on_state(s)
+        self._emit({"state": s.value})
+
+    def _emit(self, event: dict) -> None:
+        if self._on_event:
+            try:
+                self._on_event(event)
+            except Exception as exc:  # noqa: BLE001 — UI errors must not break the loop
+                log.debug("on_event failed: %s", exc)
 
     def stop(self) -> None:
         self._stop = True
@@ -128,6 +138,7 @@ class VikyOrchestrator:
         if not transcript:
             self._set_state(State.IDLE)
             return TurnResult(empty=True, latency_ms=lat)
+        self._emit({"transcript": transcript})
 
         self._set_state(State.THINKING)
         t0 = time.perf_counter()
@@ -147,6 +158,7 @@ class VikyOrchestrator:
 
         self.history.append({"role": "user", "content": transcript})
         self.history.append({"role": "assistant", "content": reply_text})
+        self._emit({"reply": reply_text})
 
         self._set_state(State.SPEAKING)
         self.wake.arm()
