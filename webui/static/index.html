@@ -262,6 +262,13 @@
     navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
   if (!secure) hintEl.textContent = 'Mikrofon potřebuje HTTPS — spusť přes https:// (viz cert).';
 
+  // Unlock audio playback within a user gesture (mobile autoplay policy).
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
   async function startRec() {
     if (!secure) { hintEl.textContent = 'Mikrofon nedostupný: otevři přes https://'; return; }
     try {
@@ -281,7 +288,10 @@
       hintEl.textContent = ''; mediaRec.stop();
     }
   }
-  talkBtn.addEventListener('click', () => recording ? stopRec() : startRec());
+  talkBtn.addEventListener('click', () => {
+    ensureAudio();  // unlock audio on this user gesture (mobile)
+    recording ? stopRec() : startRec();
+  });
 
   async function send(blob) {
     setState('thinking');
@@ -297,7 +307,7 @@
 
   function play(arrayBuf) {
     try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      ensureAudio();
       audioCtx.decodeAudioData(arrayBuf.slice(0), (buf) => {
         const src = audioCtx.createBufferSource(); src.buffer = buf;
         const an = audioCtx.createAnalyser(); an.fftSize = 256;
