@@ -117,6 +117,9 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     n8n_webhook_base: str = Field(default="http://localhost:5678/webhook", alias="N8N_WEBHOOK_BASE")
     stats_api_base: str = Field(default="http://localhost:8010", alias="STATS_API_BASE")
+    # n8n public REST API — lets Viky deploy workflows she designs.
+    n8n_api_base: str = Field(default="http://localhost:5678/api/v1", alias="N8N_API_BASE")
+    n8n_api_key: str = Field(default="", alias="N8N_API_KEY")
 
     # ------------------------------------------------------------------ #
     # Derived helpers

@@ -53,6 +53,45 @@ def test_dispatch_unknown_and_bad_args():
     assert "error" in dispatch("send_email", {"to": "only@to.cz"})
 
 
+def test_deploy_workflow_registered():
+    assert "deploy_n8n_workflow" in tool_names()
+
+
+def test_deploy_workflow_needs_api_key(monkeypatch):
+    import tools.n8n_deploy as dep
+
+    monkeypatch.setattr(dep.settings, "n8n_api_key", "")
+    monkeypatch.setattr(dep.settings, "dry_run", False)
+    r = dep.deploy_n8n_workflow("Test", nodes=[])
+    assert "error" in r and "N8N_API_KEY" in r["error"]
+
+
+def test_deploy_workflow_posts_to_api(monkeypatch):
+    import tools.n8n_deploy as dep
+
+    monkeypatch.setattr(dep.settings, "n8n_api_key", "k")
+    monkeypatch.setattr(dep.settings, "dry_run", False)
+    monkeypatch.setattr(dep.settings, "n8n_api_base", "http://localhost:5678/api/v1")
+
+    class FakeResp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return {"id": "abc123"}
+
+    sent = {}
+    def fake_post(url, headers=None, json=None, timeout=None):
+        sent["url"] = url; sent["headers"] = headers; sent["json"] = json
+        return FakeResp()
+
+    monkeypatch.setattr(dep.httpx, "post", fake_post)
+    r = dep.deploy_n8n_workflow("Ranní report", nodes=[{"name": "Webhook"}])
+    assert r["status"] == "created"
+    assert r["id"] == "abc123"
+    assert "/workflow/abc123" in r["editor_url"]
+    assert sent["headers"]["X-N8N-API-KEY"] == "k"
+    assert sent["json"]["name"] == "Ranní report"
+
+
 def test_trading_stats_returns_data():
     # Stats backend likely not running in tests -> inline mock, still valid shape.
     result = dispatch("get_trading_stats", {"instrument": "MNQ", "period": "day"})
