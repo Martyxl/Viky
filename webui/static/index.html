@@ -54,8 +54,6 @@
     <div class="brand">V<b>I</b>KY</div>
     <div class="state" id="stateChip">idle</div>
   </div>
-  <button class="talk" id="talk" title="Mluvit s Viky">🎙️</button>
-  <div class="hint" id="hint"></div>
 
   <div class="hud bottom">
     <div class="said" id="said"></div>
@@ -231,7 +229,8 @@
 
   // ---- WebSocket (falls back to preview buttons when offline) -------------
   function connect() {
-    let ws; try { ws = new WebSocket(`ws://${location.host}/ws`); } catch (e) { return; }
+    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    let ws; try { ws = new WebSocket(proto + location.host + '/ws'); } catch (e) { return; }
     ws.onmessage = (ev) => { try {
       const m = JSON.parse(ev.data);
       if (m.state) setState(m.state.toLowerCase());
@@ -252,81 +251,6 @@
     const s = e.target.getAttribute('data-s');
     if (s) { setState(s); (demo[s] || (()=>{}))(); }
   });
-
-  // ---- Push-to-talk: record mic -> /api/utterance -> play reply ----------
-  const talkBtn = document.getElementById('talk');
-  const hintEl = document.getElementById('hint');
-  let mediaRec = null, chunks = [], recording = false, audioCtx = null;
-
-  const secure = window.isSecureContext &&
-    navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
-  if (!secure) hintEl.textContent = 'Mikrofon potřebuje HTTPS — spusť přes https:// (viz cert).';
-
-  // Unlock audio playback within a user gesture (mobile autoplay policy).
-  function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    return audioCtx;
-  }
-
-  async function startRec() {
-    if (!secure) { hintEl.textContent = 'Mikrofon nedostupný: otevři přes https://'; return; }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRec = new MediaRecorder(stream);
-      chunks = [];
-      mediaRec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-      mediaRec.onstop = () => { stream.getTracks().forEach(t => t.stop()); send(new Blob(chunks)); };
-      mediaRec.start();
-      recording = true; talkBtn.classList.add('rec'); talkBtn.textContent = '⏹';
-      setState('listening'); setSaid(''); setReply(''); hintEl.textContent = 'poslouchám… (klepni pro konec)';
-    } catch (e) { hintEl.textContent = 'Mikrofon nepovolen.'; }
-  }
-  function stopRec() {
-    if (mediaRec && recording) {
-      recording = false; talkBtn.classList.remove('rec'); talkBtn.textContent = '🎙️';
-      hintEl.textContent = ''; mediaRec.stop();
-    }
-  }
-  talkBtn.addEventListener('click', () => {
-    ensureAudio();  // unlock audio on this user gesture (mobile)
-    recording ? stopRec() : startRec();
-  });
-
-  async function send(blob) {
-    setState('thinking');
-    try {
-      const res = await fetch('/api/utterance', { method: 'POST', body: blob });
-      const tr = decodeURIComponent(res.headers.get('X-Transcript') || '');
-      const rp = decodeURIComponent(res.headers.get('X-Reply') || '');
-      if (res.status === 204) { setState('idle'); setReply(rp || 'Nerozuměla jsem.'); return; }
-      if (tr) setSaid(tr); if (rp) setReply(rp);
-      play(await res.arrayBuffer());
-    } catch (e) { setState('idle'); setReply('Chyba spojení.'); }
-  }
-
-  function play(arrayBuf) {
-    try {
-      ensureAudio();
-      audioCtx.decodeAudioData(arrayBuf.slice(0), (buf) => {
-        const src = audioCtx.createBufferSource(); src.buffer = buf;
-        const an = audioCtx.createAnalyser(); an.fftSize = 256;
-        src.connect(an); an.connect(audioCtx.destination);
-        const data = new Uint8Array(an.frequencyBinCount);
-        setState('speaking'); src.start();
-        let playing = true;
-        const tick = () => {
-          if (!playing) return;
-          an.getByteTimeDomainData(data);
-          let sum = 0; for (let i = 0; i < data.length; i++) { const v = (data[i]-128)/128; sum += v*v; }
-          speakLevel = Math.min(1, Math.sqrt(sum/data.length) * 4);
-          requestAnimationFrame(tick);
-        };
-        tick();
-        src.onended = () => { playing = false; speakLevel = 0; setState('idle'); };
-      }, () => setState('idle'));
-    } catch (e) { setState('idle'); }
-  }
 
   setState('idle'); frame(); connect();
 })();
