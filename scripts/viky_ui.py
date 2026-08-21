@@ -79,9 +79,40 @@ def _free_port(port: int) -> None:
     time.sleep(1.0)
 
 
+def _ensure_xtts() -> None:
+    """If TTS_ENGINE=xtts, make sure the WSL XTTS server is up (start + wait)."""
+    if settings.tts_engine != "xtts":
+        return
+
+    def healthy() -> bool:
+        try:
+            with urllib.request.urlopen(settings.xtts_url + "/health", timeout=2) as r:
+                return b"ok" in r.read()
+        except Exception:  # noqa: BLE001
+            return False
+
+    if healthy():
+        print("XTTS server běží.")
+        return
+    print("Spouštím XTTS server ve WSL (načítá se ~30 s)…")
+    try:
+        subprocess.Popen(["wsl", "-d", "Ubuntu", "-u", "root", "--",
+                          "bash", "-lc", "cd /root && bash start_xtts.sh"])
+    except Exception as exc:  # noqa: BLE001
+        print(f"XTTS server nešel spustit ({exc}) — Viky použije Piper.")
+        return
+    for _ in range(45):
+        if healthy():
+            print("XTTS server připraven.")
+            return
+        time.sleep(2)
+    print("XTTS server nenaběhl včas — Viky zatím použije Piper (fallback).")
+
+
 def main() -> int:
     import uvicorn
 
+    _ensure_xtts()
     host = settings.webui_host
     port = settings.webui_port
 

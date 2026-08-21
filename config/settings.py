@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     piper_voice_path: str = Field(default="", alias="PIPER_VOICE_PATH")
     piper_binary: str = Field(default="piper", alias="PIPER_BINARY")
     tts_sample_rate: int = Field(default=22050, alias="TTS_SAMPLE_RATE")
+    # TTS_ENGINE: piper (fast, CPU) | xtts (nicer, GPU via the WSL XTTS server)
+    tts_engine: str = Field(default="piper", alias="TTS_ENGINE")
+    xtts_url: str = Field(default="http://127.0.0.1:8020", alias="XTTS_URL")
+    xtts_sample_rate: int = Field(default=24000, alias="XTTS_SAMPLE_RATE")
     # Read known English words with English pronunciation (via en-us phonemes)
     # instead of spelling them out Czech-style. Terms live in tts/english_terms.txt.
     tts_english_pronunciation: bool = Field(default=True, alias="TTS_ENGLISH_PRONUNCIATION")

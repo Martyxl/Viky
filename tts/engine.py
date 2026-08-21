@@ -60,16 +60,38 @@ class TTSEngine:
 
     @property
     def sample_rate(self) -> int:
+        if settings.tts_engine == "xtts":
+            return settings.xtts_sample_rate
         self._ensure_loaded()
         return self._sample_rate
 
+    def _xtts_stream(self, text: str) -> Iterator[bytes]:
+        """Stream int16 PCM from the WSL XTTS server (streams per sentence)."""
+        import httpx
+
+        with httpx.stream("POST", f"{settings.xtts_url}/speak",
+                          json={"text": text}, timeout=180.0) as r:
+            r.raise_for_status()
+            for chunk in r.iter_bytes():
+                if chunk:
+                    yield chunk
+
     def synthesize_stream(self, text: str) -> Iterator[bytes]:
         """Yield int16 little-endian mono PCM, one chunk per sentence."""
-        self._ensure_loaded()
-        assert self._voice is not None
         text = (text or "").strip()
         if not text:
             return
+
+        # XTTS engine (nicer voice, handles English natively) via WSL server.
+        if settings.tts_engine == "xtts":
+            try:
+                yield from self._xtts_stream(text)
+                return
+            except Exception as exc:  # noqa: BLE001 — fall back to Piper if server down
+                log.warning("XTTS server failed (%s); falling back to Piper", exc)
+
+        self._ensure_loaded()
+        assert self._voice is not None
 
         # Mixed CZ/EN path: only when enabled and the text actually contains a
         # known English term (otherwise use Piper's normal, faster path).
